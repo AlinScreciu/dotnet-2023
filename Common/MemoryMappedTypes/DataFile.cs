@@ -6,7 +6,7 @@ namespace Mapster.Common.MemoryMappedTypes;
 
 /// <summary>
 ///     Action to be called when iterating over <see cref="MapFeature" /> in a given bounding box via a call to
-///     <see cref="DataFile.ForeachFeature" />
+///     <see cref="DataFile.ForEachFeature" />
 /// </summary>
 /// <param name="feature">The current <see cref="MapFeature" />.</param>
 /// <param name="label">The label of the feature, <see cref="string.Empty" /> if not available.</param>
@@ -17,6 +17,66 @@ public delegate bool MapFeatureDelegate(MapFeatureData featureData);
 /// <summary>
 ///     Aggregation of all the data needed to render a map feature
 /// </summary>
+
+public enum KeyTypes
+{
+    Highway, 
+    Boundary, 
+    Leisure, 
+    Waterway, 
+    Amenity, 
+    Water, 
+    Sport, 
+    Building, 
+    Natural, 
+    Name, 
+    Admin_Level, 
+    Landuse, 
+    Military, 
+    Place, 
+    Railway
+}
+
+public enum ValuesType
+{
+    Forest,
+    Administrative
+}
+
+public enum LandType
+{
+    Military, 
+    Recreation_Ground, 
+    Industrial, 
+    Allotments, 
+    Orchard, 
+    Farm, 
+    Residential, 
+    Basin, 
+    Grass, 
+    Meadow, 
+    Cemetery, 
+    Winter_Sports, 
+    Commercial, 
+    Construction, 
+    Reservoir, 
+    Forest, 
+    Square, 
+    Brownfield, 
+    Greenfield, 
+    Quarry
+}
+
+public enum PopulatedType
+{
+    Locality,
+    Town,
+    City,
+    Hamlet
+}
+
+
+
 public readonly ref struct MapFeatureData
 {
     public long Id { get; init; }
@@ -24,7 +84,7 @@ public readonly ref struct MapFeatureData
     public GeometryType Type { get; init; }
     public ReadOnlySpan<char> Label { get; init; }
     public ReadOnlySpan<Coordinate> Coordinates { get; init; }
-    public Dictionary<string, string> Properties { get; init; }
+    public Dictionary<KeyTypes, string> Properties { get; init; }
 }
 
 /// <summary>
@@ -47,6 +107,7 @@ public unsafe class DataFile : IDisposable
     private readonly FileHeader* _fileHeader;
     private readonly MemoryMappedViewAccessor _mma;
     private readonly MemoryMappedFile _mmf;
+
 
     private readonly byte* _ptr;
     private readonly int CoordinateSizeInBytes = Marshal.SizeOf<Coordinate>();
@@ -143,7 +204,7 @@ public unsafe class DataFile : IDisposable
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-    public void ForeachFeature(BoundingBox b, MapFeatureDelegate? action)
+    public void ForEachFeature(BoundingBox b, MapFeatureDelegate? action)
     {
         if (action == null)
         {
@@ -162,13 +223,13 @@ public unsafe class DataFile : IDisposable
             {
                 var feature = GetFeature(j, header.TileOffset);
                 var coordinates = GetCoordinates(header.Tile.Value.CoordinatesOffsetInBytes, feature->CoordinateOffset, feature->CoordinateCount);
-                var isFeatureInBBox = false;
+                var boundingBoxHasFeature = false;
 
                 for (var k = 0; k < coordinates.Length; ++k)
                 {
                     if (b.Contains(coordinates[k]))
                     {
-                        isFeatureInBBox = true;
+                        boundingBoxHasFeature = true;
                         break;
                     }
                 }
@@ -179,27 +240,36 @@ public unsafe class DataFile : IDisposable
                     GetString(header.Tile.Value.StringsOffsetInBytes, header.Tile.Value.CharactersOffsetInBytes, feature->LabelOffset, out label);
                 }
 
-                if (isFeatureInBBox)
+                if (!boundingBoxHasFeature)
                 {
-                    var properties = new Dictionary<string, string>(feature->PropertyCount);
+                    continue;
+                }
+
+                    // Changes the dictionary key type from string to PropertyKeys enum
+                    var properties = new Dictionary<KeyTypes, string>(feature->PropertyCount);
                     for (var p = 0; p < feature->PropertyCount; ++p)
                     {
                         GetProperty(header.Tile.Value.StringsOffsetInBytes, header.Tile.Value.CharactersOffsetInBytes, p * 2 + feature->PropertiesOffset, out var key, out var value);
-                        properties.Add(key.ToString(), value.ToString());
-                    }
 
-                    if (!action(new MapFeatureData
+                        // This also removes the OSM keys that are not used in the application.
+                        if (!Enum.TryParse<KeyTypes>(key.ToString(), true, out var keyToAdd))
                         {
-                            Id = feature->Id,
-                            Label = label,
-                            Coordinates = coordinates,
-                            Type = feature->GeometryType,
-                            Properties = properties
-                        }))
+                            continue;
+                        }
+                        properties.Add(keyToAdd, value.ToString());
+                    }
+                    var success = action(new MapFeatureData
+                    {
+                        Id = feature->Id,
+                        Label = label,
+                        Coordinates = coordinates,
+                        Type = feature->GeometryType,
+                        Properties = properties
+                    });
+                    if (!success)
                     {
                         break;
                     }
-                }
             }
         }
     }

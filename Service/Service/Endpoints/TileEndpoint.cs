@@ -41,7 +41,7 @@ internal class TileEndpoint : IDisposable
                 MaxY = float.MinValue
             };
             var shapes = new PriorityQueue<BaseShape, int>();
-            tileEndpoint._mapData.ForeachFeature(
+            tileEndpoint._mapData.ForEachFeature(
                 new BoundingBox(
                     new Coordinate(minLat, minLon),
                     new Coordinate(maxLat, maxLon)

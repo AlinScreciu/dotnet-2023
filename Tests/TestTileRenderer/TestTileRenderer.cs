@@ -22,7 +22,7 @@ public class TestTileRenderer
             MaxY = float.MinValue
         };
         var shapes = new PriorityQueue<BaseShape, int>();
-        dataFile.ForeachFeature(
+        dataFile.ForEachFeature(
             new BoundingBox(
                 new Coordinate(42.39202286040115, 1.3300323486328125),
                 new Coordinate(42.70968691975666, 1.8560028076171875)
